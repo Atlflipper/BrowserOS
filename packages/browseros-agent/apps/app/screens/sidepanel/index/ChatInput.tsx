@@ -1,4 +1,4 @@
-import { Send, SquareStop } from 'lucide-react'
+import { Loader2, Paperclip, Send, SquareStop } from 'lucide-react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import {
   forwardRef,
@@ -9,7 +9,9 @@ import {
   useState,
 } from 'react'
 import { TabPickerPopover } from '@/components/elements/tab-picker-popover'
+import { ATTACHMENT_ACCEPT } from '@/lib/attachments'
 import type { ChatMode } from '@/modules/chat/chat-types'
+import type { StagedFiles } from './useStagedFiles'
 
 interface MentionState {
   isOpen: boolean
@@ -28,6 +30,8 @@ interface ChatInputProps {
   selectedTabs: chrome.tabs.Tab[]
   onToggleTab: (tab: chrome.tabs.Tab) => void
   onTabMentionOpenChange?: (isOpen: boolean) => void
+  /** BOS-3: files waiting to go with the next message. Absent: no attach button. */
+  files?: StagedFiles
 }
 
 export interface ChatInputHandle {
@@ -50,10 +54,13 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       selectedTabs,
       onToggleTab,
       onTabMentionOpenChange,
+      files,
     },
     ref,
   ) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const showAttach = Boolean(files?.enabled)
     const [mentionState, setMentionState] = useState<MentionState>({
       isOpen: false,
       filterText: '',
@@ -301,10 +308,23 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
           onClose={closeMention}
           anchorRef={textareaRef}
         />
+        {showAttach && files && (
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept={ATTACHMENT_ACCEPT}
+            onChange={(event) => {
+              const picked = Array.from(event.target.files ?? [])
+              event.target.value = ''
+              void files.add(picked)
+            }}
+          />
+        )}
         {/* Reserve right padding for the overlaid send/stop button. */}
         <textarea
           ref={textareaRef}
-          className="field-sizing-content max-h-60 min-h-[42px] flex-1 resize-none overflow-hidden rounded-2xl border border-border/50 bg-muted/50 py-2.5 pr-11 pl-4 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-border focus:border-[var(--accent-orange)]"
+          className={`field-sizing-content max-h-60 min-h-[42px] flex-1 resize-none overflow-hidden rounded-2xl border border-border/50 bg-muted/50 py-2.5 ${showAttach ? 'pr-20' : 'pr-11'} pl-4 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-border focus:border-[var(--accent-orange)]`}
           value={input}
           onChange={(e) => handleInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -314,6 +334,22 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
           rows={1}
         />
         <div className="absolute right-1.5 bottom-1.5 flex items-center gap-1">
+          {showAttach && files && (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={files.busy}
+              title="Attach a file (PDF, Word, text or image)"
+              className="cursor-pointer rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-wait disabled:opacity-50"
+            >
+              {files.busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Paperclip className="h-3.5 w-3.5" />
+              )}
+              <span className="sr-only">Attach a file</span>
+            </button>
+          )}
           {renderSendButton()}
         </div>
       </form>

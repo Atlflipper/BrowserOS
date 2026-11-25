@@ -20,6 +20,7 @@ import { ChatError } from './ChatError'
 import { ChatFooter } from './ChatFooter'
 import { ChatMessages } from './ChatMessages'
 import { IncognitoNotice } from './IncognitoNotice'
+import { useStagedFiles } from './useStagedFiles'
 
 /**
  * @public
@@ -57,6 +58,9 @@ export const Chat = () => {
     onTakeSurvey,
     onDismiss: onDismissJtbdPopup,
   } = useJtbdPopup()
+
+  // BOS-3: only agents (Claude Code, Codex) read attached files today.
+  const files = useStagedFiles(selectedProvider?.kind === 'acp')
 
   const [input, setInput] = useState('')
   const [attachedTabs, setAttachedTabs] = useState<chrome.tabs.Tab[]>([])
@@ -127,6 +131,8 @@ export const Chat = () => {
 
     recordMessageSent()
 
+    const fileParts = files.toFileParts()
+    const withFiles = fileParts.length ? { files: fileParts } : {}
     const sent = attachedTabs.length
       ? sendMessage({
           text: messageText,
@@ -135,8 +141,9 @@ export const Chat = () => {
             message: messageText,
             tabs: attachedTabs,
           }),
+          ...withFiles,
         })
-      : sendMessage({ text: messageText })
+      : sendMessage({ text: messageText, ...withFiles })
 
     // Keep the draft when the send did not happen. Clearing unconditionally
     // threw away what the user typed whenever sendMessage refused, which is
@@ -144,6 +151,7 @@ export const Chat = () => {
     if (!sent) return
     setInput('')
     setAttachedTabs([])
+    files.clear()
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -222,6 +230,7 @@ export const Chat = () => {
         attachedTabs={attachedTabs}
         onToggleTab={toggleTabSelection}
         onRemoveTab={removeTab}
+        files={files}
       />
     </>
   )

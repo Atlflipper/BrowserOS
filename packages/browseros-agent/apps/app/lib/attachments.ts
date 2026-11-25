@@ -9,6 +9,12 @@
  * them as a fenced `<attachment>` block on the user message.
  */
 
+import {
+  type DocumentKind,
+  documentKindOf,
+  extractDocumentText,
+} from './document-text'
+
 const MAX_ATTACHMENTS_PER_MESSAGE = 10
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024 // 5 MB after compression
 const MAX_FILE_TEXT_BYTES = 1 * 1024 * 1024 // 1 MB extracted text
@@ -23,6 +29,10 @@ const ALLOWED_IMAGE_MEDIA_TYPES = [
 ] as const
 
 const ALLOWED_FILE_MEDIA_TYPE_PREFIXES = ['text/', 'application/json'] as const
+
+/** What the file picker offers: images, text, and (BOS-3) single PDF and Word files. */
+export const ATTACHMENT_ACCEPT =
+  'image/png,image/jpeg,image/webp,image/gif,text/*,application/json,application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx'
 
 export type ServerImageAttachment = {
   kind: 'image'
@@ -84,6 +94,48 @@ function makeId(): string {
   return `att-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+/** BOS-3: a PDF or Word file, staged as its text. */
+async function stageDocument(
+  file: File,
+  kind: DocumentKind,
+): Promise<StageAttachmentResult> {
+  let text: string
+  try {
+    text = await extractDocumentText(file, kind)
+  } catch (err) {
+    return {
+      ok: false,
+      error: {
+        code: 'read_failed',
+        message:
+          err instanceof Error ? err.message : `Failed to read "${file.name}".`,
+      },
+    }
+  }
+  if (text.length > MAX_FILE_TEXT_BYTES) {
+    return {
+      ok: false,
+      error: {
+        code: 'too_large',
+        message: `"${file.name}" has too much text (max ${humanBytes(
+          MAX_FILE_TEXT_BYTES,
+        )}).`,
+      },
+    }
+  }
+  const name = file.name || 'document'
+  return {
+    ok: true,
+    attachment: {
+      id: makeId(),
+      kind: 'file',
+      mediaType: 'text/plain',
+      name,
+      payload: { kind: 'file', mediaType: 'text/plain', name, text },
+    },
+  }
+}
+
 /**
  * Read a `File` and produce the staged-attachment shape — validate type,
  * compress if it's a large image, and pre-build the server payload.
@@ -140,6 +192,10 @@ export async function stageAttachment(
       }
     }
   }
+
+  // BOS-3: a PDF or Word file travels as its text, which every agent can read.
+  const documentKind = documentKindOf(file)
+  if (documentKind) return stageDocument(file, documentKind)
 
   if (isAllowedFileMediaType(mediaType)) {
     let text: string
