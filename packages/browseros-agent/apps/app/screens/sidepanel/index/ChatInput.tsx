@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { TabPickerPopover } from '@/components/elements/tab-picker-popover'
 import type { ChatMode } from '@/modules/chat/chat-types'
+import { MicButton } from './MicButton'
 
 interface MentionState {
   isOpen: boolean
@@ -54,6 +55,26 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
     ref,
   ) => {
     const textareaRef = useRef<HTMLTextAreaElement>(null)
+    const [micError, setMicError] = useState<string | null>(null)
+
+    // BOS-2: dictated words go where the cursor is, for the owner to check before sending.
+    const insertDictation = (text: string) => {
+      const current = inputRef.current
+      const box = textareaRef.current
+      const start = box?.selectionStart ?? current.length
+      const end = box?.selectionEnd ?? current.length
+      const before = current.slice(0, start)
+      const after = current.slice(end)
+      const lead = before && !/\s$/.test(before) ? ' ' : ''
+      const next = `${before}${lead}${text}${after}`
+      inputRef.current = next
+      onInputChange(next)
+      const caret = before.length + lead.length + text.length
+      requestAnimationFrame(() => {
+        box?.focus()
+        box?.setSelectionRange(caret, caret)
+      })
+    }
     const [mentionState, setMentionState] = useState<MentionState>({
       isOpen: false,
       filterText: '',
@@ -288,35 +309,45 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
     }
 
     return (
-      <form
-        onSubmit={handleSubmit}
-        className="relative mt-2 flex w-full items-end gap-2"
-      >
-        <TabPickerPopover
-          variant="mention"
-          isOpen={mentionState.isOpen}
-          filterText={mentionState.filterText}
-          selectedTabs={selectedTabs}
-          onToggleTab={onToggleTab}
-          onClose={closeMention}
-          anchorRef={textareaRef}
-        />
-        {/* Reserve right padding for the overlaid send/stop button. */}
-        <textarea
-          ref={textareaRef}
-          className="field-sizing-content max-h-60 min-h-[42px] flex-1 resize-none overflow-hidden rounded-2xl border border-border/50 bg-muted/50 py-2.5 pr-11 pl-4 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-border focus:border-[var(--accent-orange)]"
-          value={input}
-          onChange={(e) => handleInputChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={
-            mode === 'chat' ? 'Ask about this page...' : 'What should I do?'
-          }
-          rows={1}
-        />
-        <div className="absolute right-1.5 bottom-1.5 flex items-center gap-1">
-          {renderSendButton()}
-        </div>
-      </form>
+      <>
+        <form
+          onSubmit={handleSubmit}
+          className="relative mt-2 flex w-full items-end gap-2"
+        >
+          <TabPickerPopover
+            variant="mention"
+            isOpen={mentionState.isOpen}
+            filterText={mentionState.filterText}
+            selectedTabs={selectedTabs}
+            onToggleTab={onToggleTab}
+            onClose={closeMention}
+            anchorRef={textareaRef}
+          />
+          {/* Reserve right padding for the overlaid send/stop button. */}
+          <textarea
+            ref={textareaRef}
+            className="field-sizing-content max-h-60 min-h-[42px] flex-1 resize-none overflow-hidden rounded-2xl border border-border/50 bg-muted/50 py-2.5 pr-20 pl-4 text-sm outline-none transition-colors placeholder:text-muted-foreground/70 hover:border-border focus:border-[var(--accent-orange)]"
+            value={input}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              mode === 'chat' ? 'Ask about this page...' : 'What should I do?'
+            }
+            rows={1}
+          />
+          <div className="absolute right-1.5 bottom-1.5 flex items-center gap-1">
+            <MicButton
+              onText={insertDictation}
+              onError={setMicError}
+              disabled={isBusy}
+            />
+            {renderSendButton()}
+          </div>
+        </form>
+        {micError && (
+          <p className="mt-1 px-2 text-destructive text-xs">{micError}</p>
+        )}
+      </>
     )
   },
 )

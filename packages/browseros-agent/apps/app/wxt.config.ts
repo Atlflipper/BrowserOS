@@ -72,7 +72,12 @@ export default defineConfig({
       'webNavigation',
       'downloads',
     ],
-    host_permissions: ['http://127.0.0.1/*'],
+    // BOS-2: the side panel mic talks to Amara's dictation and signs in to Amara.
+    host_permissions: [
+      'http://127.0.0.1/*',
+      'https://api.amaraai.net/*',
+      'https://kouuwwculqcpbukvtspu.supabase.co/*',
+    ],
   },
   vite: () => ({
     build: {
