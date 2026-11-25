@@ -143,6 +143,25 @@ button:focus-visible { outline: 2px solid #7fb4ff; outline-offset: 2px; }
       // The person took the page over: the overlay is gone and neo's input stays out until the
       // server has heard it and draws the overlay again with resume.
       let taken = false;
+      // BOS-1: a take over lapses after the person has left the page alone for this long, so
+      // one stray tap never locks neo out of a page for the rest of its life.
+      let releaseIdleMs = 120000;
+      let releaseTimer = null;
+      const ACTIVITY = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
+      const onActivity = (event) => { if (event.isTrusted) armRelease(); };
+      const armRelease = () => {
+        clearTimeout(releaseTimer);
+        releaseTimer = setTimeout(release, releaseIdleMs);
+      };
+      const release = () => {
+        clearTimeout(releaseTimer);
+        releaseTimer = null;
+        for (const type of ACTIVITY) window.removeEventListener(type, onActivity, true);
+        if (!taken) return;
+        taken = false;
+        queue = queue.filter((event) => event.type !== 'take-over');
+        emit({ type: 'released', after: 'idle' });
+      };
       // Every input action neo has in flight, each with its own expiry, so concurrent actions
       // each hold the shield down and one that is never resumed cannot keep it down for others.
       const yields = new Map();
@@ -207,6 +226,15 @@ button:focus-visible { outline: 2px solid #7fb4ff; outline-offset: 2px; }
         taken = true;
         emit({ type: 'take-over', via });
         dispose();
+        for (const type of ACTIVITY) window.addEventListener(type, onActivity, true);
+        armRelease();
+      };
+      // BOS-1: the island's own button only opens the question; the person confirms with the
+      // "Take over" button inside it, so a single stray click is never a take over.
+      const openAsk = () => {
+        if (!layer) return;
+        layer.dataset.touch = 'on';
+        later('touch', 8000, releaseTouch);
       };
       const enter = (next, command) => {
         const previous = state;
@@ -218,7 +246,7 @@ button:focus-visible { outline: 2px solid #7fb4ff; outline-offset: 2px; }
           el.who.textContent = COPY.working;
           swapText(next === 'between' ? (command.label || COPY.between) : label);
           if (next === 'working') setRing(command.rect); else setRing(null);
-          if (previous !== 'working' && previous !== 'between') setMain('Take over', 'grab', () => takeOver('button'));
+          if (previous !== 'working' && previous !== 'between') setMain('Take over', 'grab', openAsk);
         } else if (next === 'finished') {
           setRing(null);
           el.who.textContent = COPY.finished;
@@ -262,10 +290,12 @@ button:focus-visible { outline: 2px solid #7fb4ff; outline-offset: 2px; }
       };
       const onKey = (event) => {
         if (!event.isTrusted || !held()) return;
+        // BOS-1: Esc used to take the page over. Menus, dictation apps and habit all send Esc,
+        // so it now only opens the question; taking over needs the confirming button.
         if (event.type === 'keydown' && event.key === 'Escape') {
           event.preventDefault();
           event.stopImmediatePropagation();
-          takeOver('esc');
+          openAsk();
           return;
         }
         event.preventDefault();
@@ -342,11 +372,14 @@ button:focus-visible { outline: 2px solid #7fb4ff; outline-offset: 2px; }
       api = {
         show(command) {
           if (command.phase === 'quiet') { dispose(); return { status: 'disposed', events: drain() }; }
+          if (typeof command.releaseMs === 'number' && command.releaseMs > 0) releaseIdleMs = command.releaseMs;
           // A local take over wins until the server has heard it and answers with resume.
           if (taken && !command.resume) return { status: 'person', events: drain() };
           if (command.resume) {
             // The server has the take over already; a copy still queued must not end this hold.
             taken = false;
+            clearTimeout(releaseTimer);
+            for (const type of ACTIVITY) window.removeEventListener(type, onActivity, true);
             queue = queue.filter((event) => event.type !== 'take-over');
           }
           if (host && !host.isConnected) { dispose(); }

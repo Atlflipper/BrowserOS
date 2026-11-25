@@ -92,7 +92,7 @@ pub enum CoreError {
         reported: Option<BrowserOsVersion>,
     },
     #[error(
-        "The person took over this page and is using it. Stop and check with the user before you act on it again."
+        "The person pressed Take over on this page and confirmed it, so it is theirs for now. This is not an error and not a reason to give up the task: wait and try again in a couple of minutes (the page comes back to you once they leave it alone), or tell the user you are waiting for them to finish on this page."
     )]
     PersonControl,
     #[error(transparent)]

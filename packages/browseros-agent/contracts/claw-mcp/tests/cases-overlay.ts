@@ -231,57 +231,21 @@ export const overlayCases: ContractCase[] = [
     },
   },
   {
-    name: 'overlay: Esc takes the page over and neo checks in before acting again',
+    // BOS-1: Esc used to take the page over, and neo then stopped and blamed the person.
+    // Menus, dictation apps and habit all send Esc, so it no longer counts as a take over.
+    name: 'overlay: Esc does not take the page over and neo keeps working',
     async run(ctx) {
       const { page, cart, person } = await heldPage(ctx)
       try {
         await person.press('Escape', 27)
-        await waitUntil(
-          async () =>
-            !(await person.read<boolean>(
-              `!!document.querySelector('${HOST}')`,
-            )),
-          'the overlay to leave the page',
-        )
-        const refused = await ctx.mcp.callTool('act', {
-          page,
-          kind: 'click',
-          ref: cart,
-        })
         if (
-          !refused.isError ||
-          !textOf(refused).includes('check with the user')
+          !(await person.read<boolean>(`!!document.querySelector('${HOST}')`))
         ) {
-          throw new Error(
-            `neo was not told the person took over: ${textOf(refused)}`,
-          )
+          throw new Error('Esc removed the overlay')
         }
         expectOk(
-          await ctx.mcp.callTool('snapshot', { page }),
-          'reading still works',
-        )
-        const before = await person.read<number>('window.clicks')
-        await person.click(140, 150)
-        if ((await person.read<number>('window.clicks')) !== before + 1) {
-          throw new Error('the person could not use the page after taking over')
-        }
-
-        const fresh = expectOk(
-          await ctx.mcp.callTool('snapshot', { page }),
-          'fresh snapshot',
-        )
-        expectOk(
-          await ctx.mcp.callTool('act', {
-            page,
-            kind: 'click',
-            ref: refFor(fresh, 'Add to cart'),
-          }),
-          'neo continues once it has checked in',
-        )
-        await waitUntil(
-          async () =>
-            await person.read<boolean>(`!!document.querySelector('${HOST}')`),
-          'the overlay to come back',
+          await ctx.mcp.callTool('act', { page, kind: 'click', ref: cart }),
+          'neo keeps acting after a stray Esc',
         )
       } finally {
         person.close()
