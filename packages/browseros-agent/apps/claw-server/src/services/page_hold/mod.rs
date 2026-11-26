@@ -111,7 +111,7 @@ pub fn person_control_message() -> String {
 }
 
 /// What an action the person interrupted returns.
-pub const INTERRUPTED_MESSAGE: &str = "Interrupted: the person took over this page and is using it. Stop and check with the user before you act on it again.";
+pub const INTERRUPTED_MESSAGE: &str = "Paused: the person pressed Take over on this page and confirmed it, so this action did not finish. This is not an error and not a reason to give up the task: wait a moment and try the page again, or tell the user you are waiting for them to finish on it.";
 
 pub struct PageHoldService {
     /// The server's rollout switch (`[pages] working_overlay`).

@@ -65,6 +65,33 @@ function page(options: { frame?: boolean } = {}) {
       reveal(): boolean
     }
   const hosts = () => document.querySelectorAll('browseros-agent-overlay')
+  // The overlay's shadow root is closed; keep a handle so a test can press its buttons the
+  // way the person would.
+  const shadows: ParentNode[] = []
+  const proto = Object.getPrototypeOf(document.createElement('x')) as {
+    attachShadow?: (init: ShadowRootInit) => ParentNode
+  }
+  const attach = proto.attachShadow
+  if (attach) {
+    proto.attachShadow = function (this: unknown, init: ShadowRootInit) {
+      const root = attach.call(this, init)
+      shadows.push(root)
+      return root
+    }
+  }
+  /** A trusted click on one of the overlay's own buttons. */
+  const press = (selector: string) => {
+    const button = shadows.at(-1)?.querySelector(selector)
+    if (!button) throw new Error(`no ${selector} button`)
+    const event = new window.Event('click', { bubbles: true })
+    Object.defineProperty(event, 'isTrusted', { value: true })
+    button.dispatchEvent(event)
+  }
+  /** The person confirms a take over: the island's button, then "Take over" in the question. */
+  const takeOver = () => {
+    press('.main')
+    press('.take')
+  }
   /** The person's Escape: trusted, as a real keyboard's is. */
   const pressEsc = () => {
     const event = new window.Event('keydown', { bubbles: true })
@@ -72,7 +99,7 @@ function page(options: { frame?: boolean } = {}) {
     Object.defineProperty(event, 'isTrusted', { value: true })
     window.dispatchEvent(event)
   }
-  return { window, document, run, api, hosts, pressEsc }
+  return { window, document, run, api, hosts, pressEsc, press, takeOver }
 }
 
 describe('working overlay script', () => {
@@ -105,20 +132,50 @@ describe('working overlay script', () => {
   })
 
   test('tests that neo lowers the shield only while it acts, and never once the person took over', () => {
-    const { run, api, pressEsc } = page()
+    const { run, api, takeOver } = page()
     expect(run({ op: 'beat', expiryMs: 35_000 }).status).toBe('absent')
     run(show)
     const id = api().yieldInput(30_000)
     expect(typeof id).toBe('number')
     expect(api().resumeInput(id)).toBe(true)
-    pressEsc()
+    takeOver()
     expect(api().yieldInput(30_000)).toBe('person')
   })
 
-  test('tests that taking over removes the overlay and tells the server', () => {
+  test('tests that Esc never takes the page over (BOS-1)', () => {
     const { run, hosts, pressEsc } = page()
     run(show)
     pressEsc()
+    expect(hosts().length).toBe(1)
+    const beat = run({ op: 'beat', expiryMs: 35_000 })
+    expect(beat.status).toBe('working')
+    expect(beat.events).toEqual([])
+  })
+
+  test('tests that one tap on the island only asks, and never takes over (BOS-1)', () => {
+    const { run, hosts, press } = page()
+    run(show)
+    press('.main')
+    expect(hosts().length).toBe(1)
+    expect(run({ op: 'beat', expiryMs: 35_000 }).status).toBe('working')
+  })
+
+  test('tests that a take over lapses once the person leaves the page alone (BOS-1)', async () => {
+    const { run, api, takeOver } = page()
+    run({ ...show, releaseMs: 40 })
+    takeOver()
+    expect(api().yieldInput(30_000)).toBe('person')
+    await Bun.sleep(80)
+    const beat = run({ op: 'beat', expiryMs: 35_000 })
+    expect(beat.status).toBe('absent')
+    expect(beat.events.map((event) => event.type)).toEqual(['released'])
+    expect(run(show).status).toBe('shown')
+  })
+
+  test('tests that taking over removes the overlay and tells the server', () => {
+    const { run, hosts, takeOver } = page()
+    run(show)
+    takeOver()
     expect(hosts().length).toBe(0)
     const beat = run({ op: 'beat', expiryMs: 35_000 })
     expect(beat.status).toBe('person')
@@ -150,9 +207,9 @@ describe('working overlay script', () => {
   })
 
   test('tests that nothing is drawn after a take over until the server resumes', () => {
-    const { run, hosts, pressEsc } = page()
+    const { run, hosts, takeOver } = page()
     run(show)
-    pressEsc()
+    takeOver()
     expect(run(show).status).toBe('person')
     expect(hosts().length).toBe(0)
     const resumed = run({ ...show, resume: true })
@@ -161,9 +218,9 @@ describe('working overlay script', () => {
   })
 
   test('tests that a take over the server already has is not reported again', () => {
-    const { run, pressEsc } = page()
+    const { run, takeOver } = page()
     run(show)
-    pressEsc()
+    takeOver()
     // Never drained: the binding call reached the server instead.
     expect(run({ ...show, resume: true }).events).toEqual([])
   })
