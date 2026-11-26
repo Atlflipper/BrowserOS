@@ -45,7 +45,7 @@ function clearPending(): void {
   expiration = null
 }
 
-function toFilePart(attachment: StagedAttachment): FileUIPart {
+export function toFilePart(attachment: StagedAttachment): FileUIPart {
   const payload = attachment.payload
   if (payload.kind === 'image') {
     return {

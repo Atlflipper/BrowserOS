@@ -13,10 +13,12 @@ import { cn } from '@/lib/utils'
 import type { ChatMode } from '@/modules/chat/chat-types'
 import { useGetUserMCPIntegrations } from '@/modules/mcp/user-integrations.hooks'
 import { useWorkspace } from '@/modules/workspace/workspace.hooks'
+import { ChatAttachedFiles } from './ChatAttachedFiles'
 import { ChatAttachedTabs } from './ChatAttachedTabs'
 import { ChatInput, type ChatInputHandle } from './ChatInput'
 import { ChatModeToggle } from './ChatModeToggle'
 import { ChatSelectedText } from './ChatSelectedText'
+import type { StagedFiles } from './useStagedFiles'
 
 export interface ChatFooterProps {
   mode: ChatMode
@@ -30,6 +32,8 @@ export interface ChatFooterProps {
   attachedTabs: chrome.tabs.Tab[]
   onToggleTab: (tab: chrome.tabs.Tab) => void
   onRemoveTab: (tabId?: number) => void
+  /** BOS-3: files for the next message; absent hides the attach button. */
+  files?: StagedFiles
 }
 
 export const ChatFooter: FC<ChatFooterProps> = ({
@@ -44,6 +48,7 @@ export const ChatFooter: FC<ChatFooterProps> = ({
   attachedTabs,
   onToggleTab,
   onRemoveTab,
+  files,
 }) => {
   const { selectedFolder } = useWorkspace()
   const { servers: mcpServers } = useMcpServers()
@@ -109,6 +114,7 @@ export const ChatFooter: FC<ChatFooterProps> = ({
   return (
     <footer className="border-border/40 border-t bg-background/80 backdrop-blur-md">
       <ChatAttachedTabs tabs={attachedTabs} onRemoveTab={onRemoveTab} />
+      <ChatAttachedFiles files={files} />
       {visibleSelectedText && (
         <ChatSelectedText
           selectedText={visibleSelectedText}
@@ -221,6 +227,7 @@ export const ChatFooter: FC<ChatFooterProps> = ({
           selectedTabs={attachedTabs}
           onToggleTab={onToggleTab}
           onTabMentionOpenChange={setIsTabMentionOpen}
+          files={files}
           ref={chatInputRef}
         />
       </div>
