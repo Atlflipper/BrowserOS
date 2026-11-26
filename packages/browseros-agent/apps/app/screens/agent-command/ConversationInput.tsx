@@ -28,7 +28,11 @@ import { WorkspaceSelector } from '@/components/elements/workspace-selector'
 import { McpServerIcon } from '@/components/mcp/McpServerIcon'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { type StagedAttachment, stageAttachments } from '@/lib/attachments'
+import {
+  ATTACHMENT_ACCEPT,
+  type StagedAttachment,
+  stageAttachments,
+} from '@/lib/attachments'
 import { ProviderIcon } from '@/lib/llm-providers/providerIcons'
 import type { ProviderType } from '@/lib/llm-providers/types'
 import { useMcpServers } from '@/lib/mcp/mcpServerStorage'
@@ -466,7 +470,7 @@ export const ConversationInput: FC<ConversationInputProps> = ({
           ref={fileInputRef}
           type="file"
           multiple
-          accept="image/png,image/jpeg,image/webp,image/gif,text/*,application/json"
+          accept={ATTACHMENT_ACCEPT}
           className="hidden"
           onChange={handleFileInputChange}
         />
