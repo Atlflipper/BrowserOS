@@ -5,6 +5,7 @@ import {
   Bot,
   Compass,
   MessageSquare,
+  Mic,
   Palette,
   Server,
 } from 'lucide-react'
@@ -74,6 +75,7 @@ const primarySettingsSections: NavSection[] = [
         to: '/settings/customization',
         icon: Palette,
       },
+      { name: 'Voice', to: '/settings/voice', icon: Mic },
       { name: 'BrowserOS as MCP', to: '/settings/mcp', icon: Server },
     ],
   },
